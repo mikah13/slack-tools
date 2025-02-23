@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "animate_profile_pic": "deno run --watch animate_profile_pic.ts"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  }
+}

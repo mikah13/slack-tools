@@ -1,5 +1,4 @@
-let lastIndex = -1;
-function getRandomIndex(array: string[]): number {
+function getRandomIndex(array: string[], lastIndex: number): number {
   let newIndex: number;
   do {
     newIndex = Math.floor(Math.random() * array.length);

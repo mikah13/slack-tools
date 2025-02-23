@@ -1,9 +1,11 @@
-import { getRandomIndex } from './utils';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { corsHeaders } from './utils/headers.ts';
+import { getRandomIndex } from './utils/helper.ts';
 
 // Configuration
 const CONFIG = {
   IMAGES_PER_MINUTE: 10,
-  SLACK_TOKEN: '', // Your Slack bot token (xoxp_)
+  SLACK_APP_TOKEN: Deno.env.get('SLACK_APP_TOKEN') || '',
 };
 
 // Derived Constants
@@ -13,6 +15,7 @@ const INTERVAL = (60 * 1000) / CONFIG.IMAGES_PER_MINUTE;
 const images: string[] = []; // List of image URLs
 const statuses: { text: string; emoji: string }[] = []; // List of statuses
 let currentStatusIndex = 0;
+let lastImageIndex: number = -1;
 
 /**
  * Uploads a new Slack profile picture.
@@ -30,7 +33,7 @@ async function updateSlackPhoto(imageUrl: string): Promise<boolean> {
 
     const response = await fetch('https://slack.com/api/users.setPhoto', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${CONFIG.SLACK_TOKEN}` },
+      headers: { Authorization: `Bearer ${CONFIG.SLACK_APP_TOKEN}` },
       body: formData,
     });
 
@@ -56,7 +59,7 @@ async function updateSlackStatus(): Promise<boolean> {
     const response = await fetch('https://slack.com/api/users.profile.set', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${CONFIG.SLACK_TOKEN}`,
+        Authorization: `Bearer ${CONFIG.SLACK_APP_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -88,7 +91,7 @@ async function cycleProfile() {
     return;
   }
 
-  const currentImageIndex = getRandomIndex(images);
+  const currentImageIndex = getRandomIndex(images, lastImageIndex);
   const imageUrl = images[currentImageIndex];
 
   const [photoResult, statusResult] = await Promise.allSettled([
@@ -104,5 +107,34 @@ async function cycleProfile() {
   currentStatusIndex = (currentStatusIndex + 1) % statuses.length;
 }
 
-// Start the cycle
 setInterval(cycleProfile, INTERVAL);
+
+cycleProfile();
+
+serve((req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    return new Response(
+      JSON.stringify({
+        success: true,
+        currentImage: images[lastImageIndex],
+        currentStatus: statuses[currentStatusIndex],
+        totalImages: images.length,
+        totalStatuses: statuses.length,
+        interval: INTERVAL,
+        status: 'running',
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    return new Response(JSON.stringify({ error }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
